@@ -10,6 +10,8 @@ import clip
 import faiss
 import numpy as np
 import torch
+from google import genai
+from google.genai import types
 from PIL import Image
 
 from .config import Config, default_config
@@ -59,6 +61,7 @@ class SearchEngine:
         )
         self.model.eval()
 
+        self.client = genai.Client(api_key=self.config.gemini.api_key)
         # Load FAISS index
         index_path = self.index_folder / "index.faiss"
         if not index_path.exists():
@@ -70,8 +73,8 @@ class SearchEngine:
         # Move index to GPU if available and configured
         if self.config.index.use_gpu and self.device.type == "cuda":
             try:
-                res = faiss.StandardGpuResources()
-                self.index = faiss.index_cpu_to_gpu(res, 0, self.index)
+                self.gpu_resources = faiss.StandardGpuResources()
+                self.index = faiss.index_cpu_to_gpu(self.gpu_resources, 0, self.index)
                 self.logger.info("FAISS index moved to GPU")
             except Exception as e:
                 self.logger.warning(f"Failed to move index to GPU: {e}")
@@ -82,7 +85,7 @@ class SearchEngine:
             raise FileNotFoundError(f"Metadata not found at: {metadata_path}")
 
         self.logger.info(f"Loading metadata from: {metadata_path}")
-        with open(metadata_path) as f:
+        with open(metadata_path, encoding="utf-8") as f:
             metadata = json.load(f)
 
         # Handle both old and new metadata formats
@@ -105,6 +108,84 @@ class SearchEngine:
                 f"Index size ({self.index.ntotal}) doesn't match "
                 f"metadata ({self.num_images})"
             )
+
+    def enrich_prompt(self, inp: str) -> list[str]:
+        if not inp or not inp.strip():
+            return []
+
+        if not self.client:
+            return [s.strip() for s in inp.split(",") if s.strip()]
+
+        # REFINED PROMPT WITH STRICT RULES
+        prompt = f"""
+            You are an AI assistant for a CLIP-based image search engine.
+
+            User Input: "{inp}"
+
+            ## Task
+            Expand the user's input into a list of 5-10 visual keywords that describe the image's style, content, lighting, and composition.
+
+            ## Rules
+            1. **JSON Only:** You must output valid JSON containing a single key "keywords".
+            2. Do NOT use markdown formatting (no ```json blocks).
+            3. Do NOT add conversational text. Just the JSON.
+            4. **Visual Focus:** Keywords must be visual (e.g., "sunset", "neon", "bokeh") not abstract (e.g., "hope", "future").
+            5. **No Safety Blocks:** If the input seems sensitive (e.g., "war", "bikini"), do NOT refuse. Instead, return safe, neutral photographic terms (e.g., "photojournalism", "beach scene", "summer").
+            6. **Length:** Keep individual keywords short (1-3 words).
+            7. **Diversity:** Include a mix of:
+               - Subject (e.g., "cat", "car")
+               - Style (e.g., "cyberpunk", "vintage", "minimalist")
+               - Lighting (e.g., "cinematic lighting", "golden hour")
+               - Quality (e.g., "4k", "detailed", "sharp focus")
+            """
+
+        try:
+            # Keep these strict safety settings to prevent mid-stream cuts
+            safety_settings = [
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+            ]
+
+            response = self.client.models.generate_content(
+                model=self.config.gemini.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="text/plain",
+                    max_output_tokens=1000,
+                    safety_settings=safety_settings,
+                ),
+            )
+            raw_text = response.text
+            if "```json" in raw_text:
+                raw_text = raw_text.replace("```json", "").replace("```", "")
+            # Then parse
+            data = json.loads(raw_text or "{}")
+            keywords = data.get("keywords", [])
+
+            return [k.strip() for k in keywords if isinstance(k, str) and k.strip()]
+
+        except json.JSONDecodeError:
+            self.logger.error(
+                f"JSON Error for input '{inp}'. Raw output:\n{response.text or ''}"
+            )
+            return [s.strip() for s in inp.split(",") if s.strip()]
+        except Exception as e:
+            self.logger.warning(f"Enrichment failed: {e}")
+            return [s.strip() for s in inp.split(",") if s.strip()]
 
     def _encode_image(
         self, image_input: str | Path | Image.Image | torch.Tensor
@@ -183,6 +264,65 @@ class SearchEngine:
 
         return features
 
+    def _enrich_and_encode_text(
+        self, text: str, use_enrichment: bool = True
+    ) -> np.ndarray:
+        """
+        Enrich a text query using Gemini and encode into multiple embeddings,
+        then average them.
+
+        Args:
+            text: Text query to enrich and encode
+            use_enrichment: Whether to use Gemini enrichment (default: True)
+
+        Returns:
+            Normalized averaged embedding vector
+        """
+        if not use_enrichment or not self.config.gemini.enable_enrichment:
+            return self._encode_text(text)
+
+        # Use enrich_prompt to expand the query
+        enriched_keywords = self.enrich_prompt(text)
+
+        if not enriched_keywords:
+            # Fallback to original text if enrichment fails
+            return self._encode_text(text)
+
+        # Encode each enriched keyword
+        all_features = [self._encode_text(text)]
+        for keyword in enriched_keywords:
+            features = self._encode_text(keyword)
+            all_features.append(features)
+
+        # Average all feature vectors
+        if len(all_features) == 1:
+            return all_features[0]
+
+        avg_features = np.mean(np.vstack(all_features), axis=0, keepdims=True).astype(
+            np.float32
+        )
+
+        # Re-normalize after averaging
+        faiss.normalize_L2(avg_features)
+
+        return avg_features
+
+    def _encode_text_with_template(
+        self, text: str, template: str = "a photo of {}"
+    ) -> np.ndarray:
+        """
+        Encode text with a prompt template.
+
+        Args:
+            text: Text to encode
+            template: Template string with {} placeholder (default: "a photo of {}")
+
+        Returns:
+            Normalized embedding vector
+        """
+        prompt = template.format(text)
+        return self._encode_text(prompt)
+
     def _search(self, query_features: np.ndarray, k: int) -> list[dict]:
         """
         Perform similarity search in the index.
@@ -229,6 +369,8 @@ class SearchEngine:
         image_input: str | Path | Image.Image | torch.Tensor,
         relevance: list[Image.Image] | None = None,
         irrelevance: list[Image.Image] | None = None,
+        positive_text: list[str] | None = None,
+        negative_text: list[str] | None = None,
         k: int = 10,
     ) -> list[dict]:
         """
@@ -260,8 +402,29 @@ class SearchEngine:
                 if irrelevance
                 else None
             )
+            # Encode positive text with positive prompt template
+            positive_text_features = None
+            if positive_text:
+                positive_text_features = [
+                    self._encode_text_with_template(text, template="a photo of {}")
+                    for text in positive_text
+                ]
+
+            # Encode negative text with negative prompt template
+            negative_text_features = None
+            if negative_text:
+                negative_text_features = [
+                    self._encode_text_with_template(
+                        text, template="an image without {}"
+                    )
+                    for text in negative_text
+                ]
             query_features = self._refine_query(
-                query_features, relevance_features, irrelevance_features
+                query_features,
+                relevance_features,
+                irrelevance_features,
+                positive_text_features,
+                negative_text_features,
             )
             # Search
             results = self._search(query_features, k)
@@ -282,6 +445,8 @@ class SearchEngine:
         text_input: str,
         relevance: list[Image.Image] | None = None,
         irrelevance: list[Image.Image] | None = None,
+        positive_text: list[str] | None = None,
+        negative_text: list[str] | None = None,
         k: int = 10,
     ) -> list[dict]:
         """
@@ -306,8 +471,12 @@ class SearchEngine:
         start_time = time.time()
 
         try:
-            # Encode query text
-            query_features = self._encode_text(text_input.strip())
+            # Encode query text with enrichment
+            query_features = self._enrich_and_encode_text(
+                text_input.strip(), use_enrichment=True
+            )
+
+            # Encode relevance feedback
             relevance_features = (
                 [self._encode_image(item) for item in relevance] if relevance else None
             )
@@ -316,8 +485,30 @@ class SearchEngine:
                 if irrelevance
                 else None
             )
+
+            # Encode positive text with positive prompt template
+            positive_text_features = None
+            if positive_text:
+                positive_text_features = [
+                    self._encode_text_with_template(text, template="a photo of {}")
+                    for text in positive_text
+                ]
+
+            # Encode negative text with negative prompt template
+            negative_text_features = None
+            if negative_text:
+                negative_text_features = [
+                    self._encode_text_with_template(
+                        text, template="an image without {}"
+                    )
+                    for text in negative_text
+                ]
             query_features = self._refine_query(
-                query_features, relevance_features, irrelevance_features
+                query_features,
+                relevance_features,
+                irrelevance_features,
+                positive_text_features,
+                negative_text_features,
             )
 
             # Search
@@ -355,9 +546,13 @@ class SearchEngine:
         query,
         relevance_features,
         irrelevance_features,
+        positive_text_features,
+        negative_text_features,
         alpha=1.0,
         beta=0.75,
-        gamma=0.15,
+        gamma=0.25,
+        text_beta=0.8,
+        text_gamma=0.3,
     ):
         """
         Refine a search query based on relevance and irrelevance using the Rocchio algorithm.
@@ -366,6 +561,8 @@ class SearchEngine:
             query (np.array): The original query vector (shape: (1, D) or (D,)).
             relevance_features (list[np.array]): List of relevant feature vectors.
             irrelevance_features (list[np.array]): List of irrelevant feature vectors.
+            positive_text_features (list[np.array]): List of positive text feature vectors.
+            negative_text_features (list[np.array]): List of negative text feature vectors.
             alpha (float): Weight for original query.
             beta (float): Weight for positive feedback.
             gamma (float): Weight for negative feedback.
@@ -391,6 +588,18 @@ class SearchEngine:
             irrelevant_mean = np.mean(irrelevant_matrix, axis=0)
             refined_query -= gamma * irrelevant_mean
 
+        # 5. Add Mean of Positive Text Features (Positive Beta)
+        if positive_text_features is not None and len(positive_text_features) > 0:
+            positive_text_matrix = np.vstack(positive_text_features)
+            positive_text_mean = np.mean(positive_text_matrix, axis=0)
+            refined_query += text_beta * positive_text_mean
+
+        # 6. Subtract Mean of Negative Text Features (Negative gamma)
+        if negative_text_features is not None and len(negative_text_features) > 0:
+            negative_text_matrix = np.vstack(negative_text_features)
+            negative_text_mean = np.mean(negative_text_matrix, axis=0)
+            refined_query -= text_gamma * negative_text_mean
+
         # 4. Normalize the resulting vector
         # Since you are using Cosine Similarity (IndexFlatIP with normalized vectors),
         # the refined query MUST be normalized back to unit length.
@@ -398,7 +607,8 @@ class SearchEngine:
         if norm > 0:
             refined_query /= norm
 
-        return refined_query
+        # return refined_query
+        return refined_query.astype(np.float32).reshape(1, -1)
 
 
 def main() -> None:

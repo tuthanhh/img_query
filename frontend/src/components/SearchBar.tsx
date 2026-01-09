@@ -1,111 +1,92 @@
 import React, { useRef } from 'react';
-import { SearchIcon, UploadIcon, XIcon, LoadingSpinner } from './Icon';
+import { Search, Image as ImageIcon, X } from 'lucide-react';
+import { useSearch } from '../context/SearchContext';
 
 interface SearchBarProps {
-  query: string;
-  setQuery: (q: string) => void;
-  imageBase64: string | null;
-  setImageBase64: (base64: string | null) => void;
-  onSearch: () => void;
-  isLoading: boolean;
-  className?: string;
+  compact?: boolean;
+  onSearch?: () => void;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ 
-  query, 
-  setQuery, 
-  imageBase64, 
-  setImageBase64, 
-  onSearch, 
-  isLoading,
-  className 
-}) => {
+export const SearchBar: React.FC<SearchBarProps> = ({ compact = false, onSearch }) => {
+  const { queryText, setQueryText, queryImagePreview, setQueryImage, queryImage } = useSearch();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && onSearch) {
       onSearch();
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        // Strip prefix if necessary, but Gemini mostly handles data urls or raw base64. 
-        // We'll keep the data URL format (e.g. data:image/jpeg;base64,...) as standard Gemini helpers often prefer stripping it, 
-        // but @google/genai inlineData prefers base64 only.
-        const base64Data = base64String.split(',')[1];
-        setImageBase64(base64Data);
-      };
-      reader.readAsDataURL(file);
+    if (e.target.files && e.target.files[0]) {
+      setQueryImage(e.target.files[0]);
     }
   };
 
+  const clearImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setQueryImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const hasImage = !!queryImagePreview;
+
   return (
-    <div className={`relative flex items-center w-full max-w-2xl bg-white rounded-full shadow-md border border-gray-200 transition-shadow focus-within:shadow-lg ${className}`}>
-      <div className="pl-5 text-gray-400">
-        <SearchIcon className="w-5 h-5" />
+    <div className={`relative flex items-center w-full transition-all duration-300 ${compact ? 'h-12' : 'h-14'} bg-white border border-gray-200 rounded-full shadow-sm hover:shadow-md focus-within:shadow-md focus-within:border-brand-300`}>
+      {/* Search Icon */}
+      <div className="pl-4 pr-2 text-gray-400">
+        <Search size={compact ? 20 : 24} />
       </div>
 
-      <input
-        type="text"
-        className="flex-grow w-full py-3 px-4 text-gray-700 bg-transparent border-none outline-none placeholder-gray-400"
-        placeholder="Search images or paste image URL..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={isLoading}
-      />
-
-      {imageBase64 && (
-        <div className="relative mr-2 group">
-          <img 
-            src={`data:image/jpeg;base64,${imageBase64}`} 
-            alt="Preview" 
-            className="w-8 h-8 rounded object-cover border border-gray-200"
-          />
-          <button 
-            onClick={() => {
-              setImageBase64(null);
-              if (fileInputRef.current) fileInputRef.current.value = '';
-            }}
-            className="absolute -top-1 -right-1 bg-gray-800 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <XIcon className="w-3 h-3" />
+      {/* Image Preview Pill */}
+      {queryImagePreview && (
+        <div className="flex items-center gap-2 pl-1 pr-3 py-1 mr-2 bg-gray-100 rounded-full text-xs font-medium text-gray-700 animate-in fade-in zoom-in duration-200">
+          <img src={queryImagePreview} alt="Preview" className="w-6 h-6 rounded-full object-cover" />
+          <span className="max-w-[80px] truncate">{queryImage?.name}</span>
+          <button onClick={clearImage} className="hover:text-red-500 rounded-full p-0.5">
+            <X size={14} />
           </button>
         </div>
       )}
 
-      <div className="flex items-center pr-3 border-l border-gray-200 pl-3 space-x-2">
-        <button 
-          className="p-2 text-gray-500 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
+      {/* Text Input */}
+      <input
+        type="text"
+        className={`flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-400 text-base ${hasImage ? 'cursor-not-allowed opacity-50' : ''}`}
+        placeholder={hasImage ? "Searching by image..." : "Describe what you are looking for..."}
+        value={queryText}
+        onChange={(e) => setQueryText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={hasImage}
+      />
+
+      {/* Upload Button */}
+      <div className="pr-2">
+        <button
           onClick={() => fileInputRef.current?.click()}
-          title="Upload an image"
-          disabled={isLoading}
+          className={`p-2 rounded-full transition-colors ${hasImage ? 'text-brand-600 bg-brand-50' : 'text-gray-400 hover:text-brand-600 hover:bg-brand-50'}`}
+          title="Search by image"
         >
-          <UploadIcon className="w-5 h-5" />
+          <ImageIcon size={compact ? 20 : 24} />
         </button>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
           accept="image/*"
           onChange={handleFileChange}
         />
-        
-        <button
-          onClick={onSearch}
-          disabled={isLoading}
-          className="bg-primary text-white p-2 rounded-full hover:bg-blue-600 transition-colors disabled:bg-blue-300"
-        >
-          {isLoading ? <LoadingSpinner className="w-5 h-5" /> : <SearchIcon className="w-5 h-5" />}
-        </button>
       </div>
+
+      {/* Primary Search Button (Only visible in compact/header mode, usually invisible in large home mode as that has a separate button) */}
+      {compact && onSearch && (
+        <button
+            onClick={onSearch}
+            className="mr-1 px-4 py-1.5 bg-brand-600 text-white rounded-full text-sm font-medium hover:bg-brand-700 transition-colors"
+        >
+            Search
+        </button>
+      )}
     </div>
   );
 };
-
-export default SearchBar;

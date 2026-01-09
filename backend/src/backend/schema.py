@@ -32,6 +32,13 @@ class SearchRequest(BaseModel):
         default_factory=list,
         description="Previously disliked items to refine search",
     )
+    positive_text: list[str] | None = Field(
+        None, description="Positive text for refining search"
+    )
+    negative_text: list[str] | None = Field(
+        None, description="Negative text for refining search"
+    )
+
     k: int | None = Field(
         default=12,
         ge=1,

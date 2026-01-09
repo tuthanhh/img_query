@@ -62,6 +62,8 @@ async def search(request: SearchRequest):
     irrelevance = [
         Image.open(item.image_path).convert("RGB") for item in request.disliked_items
     ]
+    pos_text = request.positive_text
+    neg_text = request.negative_text
 
     if not search_query and not image_data:
         raise HTTPException(
@@ -76,6 +78,8 @@ async def search(request: SearchRequest):
             k=num_results if num_results else 12,
             relevance=relevance,
             irrelevance=irrelevance,
+            positive_text=pos_text,
+            negative_text=neg_text,
         )
         results = _format_search_results(raw_results)
 

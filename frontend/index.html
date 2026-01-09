@@ -3,55 +3,11 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Visual Finder</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-            rel="stylesheet"
-        />
-        <script>
-            tailwind.config = {
-                theme: {
-                    extend: {
-                        fontFamily: {
-                            sans: ["Inter", "sans-serif"],
-                        },
-                        colors: {
-                            primary: "#4285F4",
-                            secondary: "#EA4335",
-                            success: "#34A853",
-                            warning: "#FBBC05",
-                        },
-                    },
-                },
-            };
-        </script>
-        <style>
-            body {
-                font-family: "Inter", sans-serif;
-                background-color: #f8f9fa;
-            }
-            /* Custom scrollbar for better aesthetics */
-            ::-webkit-scrollbar {
-                width: 8px;
-                height: 8px;
-            }
-            ::-webkit-scrollbar-track {
-                background: transparent;
-            }
-            ::-webkit-scrollbar-thumb {
-                background: #cbd5e1;
-                border-radius: 4px;
-            }
-            ::-webkit-scrollbar-thumb:hover {
-                background: #94a3b8;
-            }
-        </style>
-
-        <link rel="stylesheet" href="/index.css" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <title>Rocchio Search - Relevance Feedback</title>
     </head>
     <body>
         <div id="root"></div>
-        <script type="module" src="/src/main.tsx"></script>
+        <script type="module" src="/index.tsx"></script>
     </body>
 </html>

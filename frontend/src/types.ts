@@ -8,20 +8,34 @@ export interface SearchResult {
   image_data: string;
 }
 
-export interface SearchState {
-  query: string;
-  imageBase64: string | null;
-  results: SearchResult[];
-  likedIds: Set<string>;
-  dislikedIds: Set<string>;
-  isLoading: boolean;
-  hasSearched: boolean;
+export interface FeedbackType {
+  type: "relevant" | "irrelevant" | null;
 }
 
-export const FeedbackType = {
-  LIKE: "LIKE",
-  DISLIKE: "DISLIKE",
-  NEUTRAL: "NEUTRAL",
-} as const;
+export interface SearchState {
+  view: "home" | "results";
+  queryText: string;
+  queryImage: File | null;
+  queryImagePreview: string | null;
+  positiveContext: string;
+  negativeContext: string;
+  k: number;
+  results: SearchResult[];
+  relevantIds: Set<string>;
+  irrelevantIds: Set<string>;
+  isLoading: boolean;
+}
 
-export type FeedbackType = (typeof FeedbackType)[keyof typeof FeedbackType];
+export interface SearchContextType extends SearchState {
+  setQueryText: (text: string) => void;
+  setQueryImage: (file: File | null) => void;
+  setPositiveContext: (text: string) => void;
+  setNegativeContext: (text: string) => void;
+  setK: (k: number) => void;
+  toggleRelevance: (id: string, type: FeedbackType) => void;
+  performSearch: () => void;
+  performRandomSearch: () => void;
+  refineSearch: () => void;
+  resetSearch: () => void;
+  removeFeedback: (id: string) => void;
+}

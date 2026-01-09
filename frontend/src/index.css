@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme {
+    /* Primary Colors */
+    --color-primary: #3b82f6;
+    --color-success: #10b981;
+    --color-secondary: #ef4444;
+
+    /* Brand Colors (Blue) */
+    --color-brand-50: #eff6ff;
+    --color-brand-100: #dbeafe;
+    --color-brand-200: #bfdbfe;
+    --color-brand-300: #93c5fd;
+    --color-brand-400: #60a5fa;
+    --color-brand-500: #3b82f6;
+    --color-brand-600: #2563eb;
+    --color-brand-700: #1d4ed8;
+    --color-brand-800: #1e40af;
+    --color-brand-900: #1e3a8a;
+
+    /* Relevance Colors (Green/Emerald) */
+    --color-relevance-50: #f0fdf4;
+    --color-relevance-100: #dcfce7;
+    --color-relevance-200: #bbf7d0;
+    --color-relevance-300: #86efac;
+    --color-relevance-400: #4ade80;
+    --color-relevance-500: #10b981;
+    --color-relevance-600: #059669;
+    --color-relevance-700: #15803d;
+    --color-relevance-800: #166534;
+    --color-relevance-900: #14532d;
+
+    /* Irrelevance Colors (Red/Rose) */
+    --color-irrelevance-50: #fef2f2;
+    --color-irrelevance-100: #fee2e2;
+    --color-irrelevance-200: #fecaca;
+    --color-irrelevance-300: #fca5a5;
+    --color-irrelevance-400: #f87171;
+    --color-irrelevance-500: #f43f5e;
+    --color-irrelevance-600: #e11d48;
+    --color-irrelevance-700: #b91c1c;
+    --color-irrelevance-800: #991b1b;
+    --color-irrelevance-900: #7f1d1d;
+}
+
+/* Custom Scrollbar Styles */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Custom Animations */
+@keyframes slide-in-from-left {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+.animate-in {
+    animation-duration: 0.3s;
+    animation-fill-mode: both;
+}
+
+.slide-in-from-left {
+    animation-name: slide-in-from-left;
+}
+
+/* Line Clamp Utilities */
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Base Styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+        sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+    min-height: 100vh;
+}

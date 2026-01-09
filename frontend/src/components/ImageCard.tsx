@@ -1,94 +1,101 @@
 import React from "react";
+import { ThumbsUp, ThumbsDown, Check } from "lucide-react";
 import type { SearchResult } from "../types";
-import { FeedbackType } from "../types";
-import { ThumbsUpIcon, ThumbsDownIcon } from "./Icon";
+import { useSearch } from "../context/SearchContext";
 
 interface ImageCardProps {
-  result: SearchResult;
-  feedback: FeedbackType;
-  onFeedback: (type: FeedbackType) => void;
+  image: SearchResult;
 }
 
-const ImageCard: React.FC<ImageCardProps> = ({
-  result,
-  feedback,
-  onFeedback,
-}) => {
-  // 1. Prepend the Data URI header (adjust 'image/jpeg' or 'image/png' as needed)
-  const imageSource = `data:image/jpeg;base64,${result.image_data}`;
+export const ImageCard: React.FC<ImageCardProps> = ({ image }) => {
+  const { relevantIds, irrelevantIds, toggleRelevance } = useSearch();
+
+  const isRelevant = relevantIds.has(image.id);
+  const isIrrelevant = irrelevantIds.has(image.id);
+  const imageSource = `data:image/jpeg;base64,${image.image_data}`;
+
+  let borderClass = "border-transparent";
+  let opacityClass = "opacity-100";
+  let shadowClass = "shadow-sm hover:shadow-xl";
+
+  if (isRelevant) {
+    borderClass = "border-green-500 ring-4 ring-green-500/20";
+    shadowClass = "shadow-lg shadow-green-500/10";
+  } else if (isIrrelevant) {
+    borderClass = "border-red-500";
+    opacityClass = "opacity-60 grayscale-[0.5]";
+    shadowClass = "shadow-none";
+  }
 
   return (
     <div
-      className={`group relative rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 bg-white border ${feedback === FeedbackType.LIKE ? "border-success ring-2 ring-success ring-opacity-50" : feedback === FeedbackType.DISLIKE ? "border-secondary ring-2 ring-secondary ring-opacity-50" : "border-gray-100"}`}
+      className={`group relative rounded-xl overflow-hidden bg-white border-2 transition-all duration-300 ${borderClass} ${opacityClass} ${shadowClass}`}
     >
-      {/* Image Container */}
-      <div className="aspect-[4/3] overflow-hidden bg-gray-100 relative">
-        <img
-          src={imageSource}
-          alt={result.description}
-          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-          loading="lazy"
-        />
+      {/* Image */}
+      <img
+        src={imageSource}
+        alt={image.description}
+        className="w-full h-64 object-cover"
+        loading="lazy"
+      />
 
-        {/* Overlay Gradient on Hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      </div>
-
-      {/* Content */}
-      <div className="p-3">
-        <p className="text-sm text-gray-700 font-medium line-clamp-2 leading-snug">
-          {result.description}
+      {/* Overlay Interactions */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+        <p className="text-white font-medium text-sm mb-1 line-clamp-2">
+          {image.description}
         </p>
-        <p className="text-xs text-gray-400 mt-1 line-clamp-1">
-          {result.relevanceReason}
+        <p className="text-white/70 text-xs mb-3 line-clamp-1">
+          {image.relevanceReason}
         </p>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() =>
+              toggleRelevance(
+                image.id,
+                isRelevant ? { type: null } : { type: "relevant" },
+              )
+            }
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-colors backdrop-blur-md ${
+              isRelevant
+                ? "bg-green-500 text-white"
+                : "bg-white/20 text-white hover:bg-green-500"
+            }`}
+          >
+            {isRelevant ? <Check size={16} /> : <ThumbsUp size={16} />}
+            Relevant
+          </button>
+
+          <button
+            onClick={() =>
+              toggleRelevance(
+                image.id,
+                isIrrelevant ? { type: null } : { type: "irrelevant" },
+              )
+            }
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-colors backdrop-blur-md ${
+              isIrrelevant
+                ? "bg-red-500 text-white"
+                : "bg-white/20 text-white hover:bg-red-500"
+            }`}
+          >
+            <ThumbsDown size={16} />
+            Irrelevant
+          </button>
+        </div>
       </div>
 
-      {/* Action Buttons - Always visible on mobile, visible on hover for desktop */}
-      <div className="absolute top-2 right-2 flex space-x-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onFeedback(
-              feedback === FeedbackType.LIKE
-                ? FeedbackType.NEUTRAL
-                : FeedbackType.LIKE,
-            );
-          }}
-          className={`p-2 rounded-full backdrop-blur-md shadow-sm transition-colors ${
-            feedback === FeedbackType.LIKE
-              ? "bg-success text-white"
-              : "bg-white/90 text-gray-600 hover:text-success hover:bg-white"
-          }`}
-          title="More like this"
-        >
-          <ThumbsUpIcon
-            className="w-4 h-4"
-            filled={feedback === FeedbackType.LIKE}
-          />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onFeedback(
-              feedback === FeedbackType.DISLIKE
-                ? FeedbackType.NEUTRAL
-                : FeedbackType.DISLIKE,
-            );
-          }}
-          className={`p-2 rounded-full backdrop-blur-md shadow-sm transition-colors ${
-            feedback === FeedbackType.DISLIKE
-              ? "bg-secondary text-white"
-              : "bg-white/90 text-gray-600 hover:text-secondary hover:bg-white"
-          }`}
-          title="Less like this"
-        >
-          <ThumbsDownIcon
-            className="w-4 h-4"
-            filled={feedback === FeedbackType.DISLIKE}
-          />
-        </button>
-      </div>
+      {/* Sticky Status Indicator (Visible when not hovering if selected) */}
+      {isRelevant && (
+        <div className="absolute top-3 left-3 bg-green-500 text-white p-1.5 rounded-full shadow-md z-10 group-hover:opacity-0 transition-opacity">
+          <ThumbsUp size={14} fill="currentColor" />
+        </div>
+      )}
+      {isIrrelevant && (
+        <div className="absolute top-3 left-3 bg-red-500 text-white p-1.5 rounded-full shadow-md z-10 group-hover:opacity-0 transition-opacity">
+          <ThumbsDown size={14} fill="currentColor" />
+        </div>
+      )}
     </div>
   );
 };

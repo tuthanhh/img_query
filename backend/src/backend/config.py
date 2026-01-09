@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 
 @dataclass
 class ModelConfig:
@@ -19,6 +24,19 @@ class ModelConfig:
         device_env = os.getenv("DEVICE")
         if device_env in ("cuda", "cpu", "auto"):
             object.__setattr__(self, "device", device_env)
+
+
+@dataclass
+class GeminiConfig:
+    """Configuration for Gemini API."""
+
+    api_key: str = field(default_factory=lambda: os.getenv("GEMINI_API_KEY", ""))
+    model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+    )
+    enable_enrichment: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_ENRICHMENT", "true").lower() == "true"
+    )
 
 
 @dataclass
@@ -114,6 +132,7 @@ class Config:
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
+    gemini: GeminiConfig = field(default_factory=GeminiConfig)
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "Config":
@@ -125,6 +144,7 @@ class Config:
             processing=ProcessingConfig(**config_dict.get("processing", {})),
             search=SearchConfig(**config_dict.get("search", {})),
             server=ServerConfig(**config_dict.get("server", {})),
+            gemini=GeminiConfig(**config_dict.get("gemini", {})),
         )
 
     @classmethod
@@ -170,6 +190,11 @@ class Config:
                 "reload": self.server.reload,
                 "cors_origins": self.server.cors_origins,
             },
+            "gemini": {
+                "api_key": self.gemini.api_key,
+                "model": self.gemini.model,
+                "enable_enrichment": self.gemini.enable_enrichment,
+            },
         }
 
     def validate(self) -> list[str]:
@@ -180,7 +205,6 @@ class Config:
             List of validation messages (empty if valid)
         """
         issues = []
-
         # Check if data directories exist
         if not self.data.archive_dir.exists():
             issues.append(f"Archive directory does not exist: {self.data.archive_dir}")
@@ -200,6 +224,8 @@ class Config:
             issues.append(
                 f"default_k ({self.search.default_k}) > max_k ({self.search.max_k})"
             )
+        if self.gemini.enable_enrichment and not self.gemini.api_key:
+            issues.append("Gemini enrichment is enabled but GEMINI_API_KEY is not set")
 
         return issues
 
