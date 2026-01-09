@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import cast
 
 import clip
 import faiss
@@ -14,7 +14,6 @@ from PIL import Image
 
 from .config import Config, default_config
 from .utils import (
-    format_time,
     get_logger,
     safe_load_image,
     validate_directory,
@@ -83,7 +82,7 @@ class SearchEngine:
             raise FileNotFoundError(f"Metadata not found at: {metadata_path}")
 
         self.logger.info(f"Loading metadata from: {metadata_path}")
-        with open(metadata_path, "r") as f:
+        with open(metadata_path) as f:
             metadata = json.load(f)
 
         # Handle both old and new metadata formats
@@ -129,11 +128,17 @@ class SearchEngine:
             image = safe_load_image(image_path)
             if image is None:
                 raise ValueError(f"Failed to load image: {image_input}")
-            image_tensor = self.preprocess(image).unsqueeze(0).to(self.device)
+            image_tensor = (
+                cast(torch.Tensor, self.preprocess(image)).unsqueeze(0).to(self.device)
+            )
 
         elif isinstance(image_input, Image.Image):
             # PIL Image object
-            image_tensor = self.preprocess(image_input).unsqueeze(0).to(self.device)
+            image_tensor = (
+                cast(torch.Tensor, self.preprocess(image_input))
+                .unsqueeze(0)
+                .to(self.device)
+            )
 
         elif isinstance(image_input, torch.Tensor):
             # PyTorch tensor

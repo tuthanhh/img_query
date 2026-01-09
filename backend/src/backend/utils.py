@@ -3,7 +3,6 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 from PIL import Image
 
@@ -86,7 +85,7 @@ def validate_image_path(image_path: str | Path) -> Path:
         with Image.open(path) as img:
             img.verify()
     except Exception as e:
-        raise ValueError(f"Invalid image file: {path}. Error: {e}")
+        raise ValueError(f"Invalid image file: {path}. Error: {e}") from e
 
     return path
 

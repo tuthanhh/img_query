@@ -3,7 +3,6 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional, Tuple
 
 from sklearn.model_selection import train_test_split
 
@@ -18,7 +17,7 @@ def split_image(
     ratio: float = 0.2,
     state: int = 42,
     copy: bool = False,
-) -> Tuple[Path, Path]:
+) -> tuple[Path, Path]:
     """
     Split images from a source folder into train and test sets.
 

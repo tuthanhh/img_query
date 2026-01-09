@@ -4,13 +4,12 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import cast
 
 import clip
 import faiss
 import numpy as np
 import torch
-from PIL import Image
 
 from .config import Config, default_config
 from .utils import (
@@ -26,7 +25,7 @@ from .utils import (
 class ImageIndexer:
     """Class for creating FAISS indexes from image embeddings."""
 
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Config | None = None):
         """
         Initialize the ImageIndexer.
 
@@ -51,7 +50,7 @@ class ImageIndexer:
         )
         self.model.eval()  # Set to evaluation mode
 
-    def encode_image(self, image_path: Path) -> Optional[np.ndarray]:
+    def encode_image(self, image_path: Path) -> np.ndarray | None:
         """
         Encode a single image to an embedding vector.
 
@@ -67,7 +66,9 @@ class ImageIndexer:
             if image is None:
                 return None
 
-            image_tensor = self.preprocess(image).unsqueeze(0).to(self.device)
+            image_tensor = (
+                cast(torch.Tensor, self.preprocess(image)).unsqueeze(0).to(self.device)
+            )
 
             # Encode image
             with torch.no_grad():
@@ -81,8 +82,8 @@ class ImageIndexer:
             return None
 
     def encode_images_batch(
-        self, image_paths: List[Path], batch_size: Optional[int] = None
-    ) -> Tuple[List[np.ndarray], List[Path]]:
+        self, image_paths: list[Path], batch_size: int | None = None
+    ) -> tuple[list[np.ndarray], list[Path]]:
         """
         Encode multiple images in batches.
 
@@ -151,7 +152,7 @@ class ImageIndexer:
 
         return embeddings, successful_paths
 
-    def create_faiss_index(self, embeddings: List[np.ndarray]) -> faiss.IndexFlatIP:
+    def create_faiss_index(self, embeddings: list[np.ndarray]) -> faiss.IndexFlatIP:
         """
         Create a FAISS index from embeddings.
 
@@ -174,7 +175,8 @@ class ImageIndexer:
         index = faiss.IndexFlatIP(dimension)  # Inner product (cosine similarity)
 
         # Add vectors to index
-        index.add(embedding_matrix)
+        # Pyright sees the internal 'add(n, x)' signature, but Python handles 'n' automatically.
+        index.add(embedding_matrix)  # pyright: ignore[reportCallIssue]
 
         self.logger.info(
             f"Index created with {index.ntotal} vectors of dimension {dimension}"
@@ -185,7 +187,7 @@ class ImageIndexer:
     def save_index(
         self,
         index: faiss.Index,
-        image_paths: List[Path],
+        image_paths: list[Path],
         index_folder: Path,
     ) -> None:
         """
@@ -221,8 +223,8 @@ class ImageIndexer:
         self,
         image_folder: Path,
         index_folder: Path,
-        batch_size: Optional[int] = None,
-    ) -> Tuple[faiss.Index, List[Path]]:
+        batch_size: int | None = None,
+    ) -> tuple[faiss.Index, list[Path]]:
         """
         Create index from images in a folder.
 
@@ -285,7 +287,7 @@ class ImageIndexer:
 def create_index(
     image_folder: str | Path,
     index_folder: str | Path,
-    config: Optional[Config] = None,
+    config: Config | None = None,
 ) -> None:
     """
     Convenience function to create an index from images.
