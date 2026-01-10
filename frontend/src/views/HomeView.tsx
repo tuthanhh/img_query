@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { SearchBar } from "../components/SearchBar";
 import { useSearch } from "../context/SearchContext";
-import { Search, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 export const HomeView: React.FC = () => {
   const {
@@ -16,6 +16,19 @@ export const HomeView: React.FC = () => {
     isLoading,
   } = useSearch();
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [activeSearchType, setActiveSearchType] = useState<
+    "standard" | "lucky" | null
+  >(null);
+
+  const handleStandardSearch = () => {
+    setActiveSearchType("standard");
+    performSearch();
+  };
+
+  const handleLuckySearch = () => {
+    setActiveSearchType("lucky");
+    performRandomSearch();
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4 animate-in fade-in duration-500">
@@ -32,23 +45,38 @@ export const HomeView: React.FC = () => {
 
         {/* Main Search */}
         <div className="w-full mb-8">
-          <SearchBar onSearch={performSearch} />
+          <SearchBar onSearch={handleStandardSearch} />
         </div>
 
         {/* Action Button */}
         <div className="flex gap-4 mb-6">
           <button
-            onClick={performSearch}
-            className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-md shadow-sm transition-colors"
+            onClick={handleStandardSearch}
+            disabled={isLoading}
+            className={`min-w-[160px] flex items-center justify-center gap-2 px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-md shadow-sm transition-colors ${isLoading ? "opacity-80 cursor-not-allowed" : ""}`}
           >
-            Search Images
+            {isLoading && activeSearchType === "standard" ? (
+              <>
+                <Loader2 size={20} className="animate-spin" />
+                <span>Searching...</span>
+              </>
+            ) : (
+              <span>Search Images</span>
+            )}
           </button>
           <button
-            onClick={performRandomSearch}
+            onClick={handleLuckySearch}
             disabled={isLoading}
-            className="px-8 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium rounded-md border border-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`min-w-[160px] flex items-center justify-center gap-2 px-8 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium rounded-md border border-gray-200 transition-colors ${isLoading ? "opacity-80 cursor-not-allowed" : ""}`}
           >
-            {isLoading ? "Searching..." : "I'm Feeling Lucky"}
+            {isLoading && activeSearchType === "lucky" ? (
+              <>
+                <Loader2 size={20} className="animate-spin text-brand-600" />
+                <span>Lucky...</span>
+              </>
+            ) : (
+              <span>I'm Feeling Lucky</span>
+            )}
           </button>
         </div>
 
