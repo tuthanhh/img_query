@@ -50,12 +50,11 @@ async def search(request: SearchRequest):
     """
     engine = get_search_engine()
 
-    # Check content type
-    # Handle JSON request
-
+    # Extract request parameters
     search_query = request.query
     image_data = request.image
     num_results = request.k
+    algorithm_type = request.algorithm_type
     relevance = [
         Image.open(item.image_path).convert("RGB") for item in request.liked_items
     ]
@@ -72,7 +71,9 @@ async def search(request: SearchRequest):
         )
 
     if search_query:
-        logger.info(f"Text search (JSON): '{search_query}' (k={num_results})")
+        logger.info(
+            f"Text search (JSON): '{search_query}' (k={num_results}, algo={algorithm_type})"
+        )
         raw_results = engine.search_by_text(
             search_query,
             k=num_results if num_results else 12,
@@ -80,6 +81,7 @@ async def search(request: SearchRequest):
             irrelevance=irrelevance,
             positive_text=pos_text,
             negative_text=neg_text,
+            algorithm_type=algorithm_type,
         )
         results = _format_search_results(raw_results)
 
@@ -91,7 +93,9 @@ async def search(request: SearchRequest):
         )
 
     elif image_data:
-        logger.info(f"Image search (base64): {image_data[:100]}' (k={num_results})")
+        logger.info(
+            f"Image search (base64): {image_data[:100]}' (k={num_results}, algo={algorithm_type})"
+        )
         # convert image
         image = Image.open(BytesIO(base64.b64decode(image_data)))
         raw_results = engine.search_by_image(
@@ -99,6 +103,9 @@ async def search(request: SearchRequest):
             k=num_results if num_results else 12,
             relevance=relevance,
             irrelevance=irrelevance,
+            positive_text=pos_text,
+            negative_text=neg_text,
+            algorithm_type=algorithm_type,
         )
         results = _format_search_results(raw_results)
 

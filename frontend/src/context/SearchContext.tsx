@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import type { ReactNode } from "react";
-import type { SearchContextType, SearchState, FeedbackType } from "../types";
+import type {
+  SearchContextType,
+  SearchState,
+  FeedbackType,
+  AlgorithmType,
+} from "../types";
 import { performSearchBackend, generateRandomQuery } from "../services/service";
 const defaultState: SearchState = {
   view: "home",
@@ -10,9 +15,12 @@ const defaultState: SearchState = {
   positiveContext: "",
   negativeContext: "",
   k: 12,
+  algorithmType: "standard",
   results: [],
   relevantIds: new Set(),
   irrelevantIds: new Set(),
+  relevantImages: [],
+  irrelevantImages: [],
   isLoading: false,
 };
 
@@ -59,26 +67,39 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
   const setNegativeContext = (text: string) =>
     setState((prev) => ({ ...prev, negativeContext: text }));
   const setK = (k: number) => setState((prev) => ({ ...prev, k }));
+  const setAlgorithmType = (algo: AlgorithmType) =>
+    setState((prev) => ({ ...prev, algorithmType: algo }));
 
   const toggleRelevance = (id: string, type: FeedbackType) => {
     setState((prev) => {
       const newRelevant = new Set(prev.relevantIds);
       const newIrrelevant = new Set(prev.irrelevantIds);
+      let newRelevantImages = [...prev.relevantImages];
+      let newIrrelevantImages = [...prev.irrelevantImages];
+
+      // Find the image in current results
+      const image = prev.results.find((r) => r.id === id);
 
       // Clean slate for this ID first
       newRelevant.delete(id);
       newIrrelevant.delete(id);
+      newRelevantImages = newRelevantImages.filter((img) => img.id !== id);
+      newIrrelevantImages = newIrrelevantImages.filter((img) => img.id !== id);
 
-      if (type && type.type === "relevant") {
+      if (type && type.type === "relevant" && image) {
         newRelevant.add(id);
-      } else if (type && type.type === "irrelevant") {
+        newRelevantImages.push(image);
+      } else if (type && type.type === "irrelevant" && image) {
         newIrrelevant.add(id);
+        newIrrelevantImages.push(image);
       }
 
       return {
         ...prev,
         relevantIds: newRelevant,
         irrelevantIds: newIrrelevant,
+        relevantImages: newRelevantImages,
+        irrelevantImages: newIrrelevantImages,
       };
     });
   };
@@ -126,6 +147,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         positiveText,
         negativeText,
         state.k,
+        state.algorithmType,
       );
 
       setState((prev) => ({
@@ -133,6 +155,8 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         results: results,
         relevantIds: new Set(), // Reset feedback on new primary search
         irrelevantIds: new Set(),
+        relevantImages: [],
+        irrelevantImages: [],
         view: "results",
         isLoading: false,
       }));
@@ -149,6 +173,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
     state.positiveContext,
     state.negativeContext,
     state.k,
+    state.algorithmType,
   ]);
 
   const performRandomSearch = useCallback(async () => {
@@ -186,6 +211,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         positiveText,
         negativeText,
         state.k,
+        state.algorithmType,
       );
 
       setState((prev) => ({
@@ -193,6 +219,8 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         results: results,
         relevantIds: new Set(),
         irrelevantIds: new Set(),
+        relevantImages: [],
+        irrelevantImages: [],
         isLoading: false,
       }));
     } catch (error) {
@@ -202,7 +230,12 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         isLoading: false,
       }));
     }
-  }, [state.positiveContext, state.negativeContext, state.k]);
+  }, [
+    state.positiveContext,
+    state.negativeContext,
+    state.k,
+    state.algorithmType,
+  ]);
 
   const refineSearch = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true }));
@@ -251,6 +284,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         positiveText,
         negativeText,
         state.k,
+        state.algorithmType,
       );
 
       setState((prev) => ({
@@ -274,6 +308,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
     state.irrelevantIds,
     state.results,
     state.k,
+    state.algorithmType,
   ]);
 
   const resetSearch = () => {
@@ -289,6 +324,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({
         setPositiveContext,
         setNegativeContext,
         setK,
+        setAlgorithmType,
         toggleRelevance,
         performSearch,
         performRandomSearch,

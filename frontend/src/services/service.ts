@@ -10,6 +10,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
  * @param dislikedItems - Array of previously disliked/irrelevant search results for refinement
  * @param positiveText - Array of positive keywords to include in search
  * @param negativeText - Array of negative keywords to exclude from search
+ * @param k - Number of results to retrieve
+ * @param algorithmType - Relevance feedback algorithm type
  */
 export const performSearchBackend = async (
   queryText: string,
@@ -19,6 +21,7 @@ export const performSearchBackend = async (
   positiveText: string[],
   negativeText: string[],
   k: number,
+  algorithmType: string = "standard",
 ): Promise<SearchResult[]> => {
   try {
     const requestBody = {
@@ -29,6 +32,7 @@ export const performSearchBackend = async (
       positive_text: positiveText,
       negative_text: negativeText,
       k: k,
+      algorithm_type: algorithmType,
     };
 
     const response = await fetch(`${API_BASE_URL}/api/search`, {

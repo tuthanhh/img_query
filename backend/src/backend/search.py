@@ -372,13 +372,19 @@ class SearchEngine:
         positive_text: list[str] | None = None,
         negative_text: list[str] | None = None,
         k: int = 10,
+        algorithm_type: str = "standard",
     ) -> list[dict]:
         """
         Search for similar images using an input image.
 
         Args:
             image_input: Query image (path, PIL Image, or tensor)
+            relevance: List of relevant images for feedback
+            irrelevance: List of irrelevant images for feedback
+            positive_text: List of positive text queries
+            negative_text: List of negative text queries
             k: Number of results to return
+            algorithm_type: Relevance feedback algorithm ('standard', 'ide_regular', 'ide_dec_hi')
 
         Returns:
             List of dictionaries with keys:
@@ -419,13 +425,32 @@ class SearchEngine:
                     )
                     for text in negative_text
                 ]
-            query_features = self._refine_query(
-                query_features,
-                relevance_features,
-                irrelevance_features,
-                positive_text_features,
-                negative_text_features,
-            )
+            # Select refinement algorithm based on type
+            self.logger.info(f"Using refinement algorithm: {algorithm_type}")
+            if algorithm_type == "ide_dec_hi":
+                query_features = self._refine_query_dec_hi(
+                    query_features,
+                    relevance_features,
+                    irrelevance_features,
+                    positive_text_features,
+                    negative_text_features,
+                )
+            elif algorithm_type == "ide_regular":
+                query_features = self._refine_query_ide_reg(
+                    query_features,
+                    relevance_features,
+                    irrelevance_features,
+                    positive_text_features,
+                    negative_text_features,
+                )
+            else:  # standard
+                query_features = self._refine_query_standard(
+                    query_features,
+                    relevance_features,
+                    irrelevance_features,
+                    positive_text_features,
+                    negative_text_features,
+                )
             # Search
             results = self._search(query_features, k)
 
@@ -448,13 +473,19 @@ class SearchEngine:
         positive_text: list[str] | None = None,
         negative_text: list[str] | None = None,
         k: int = 10,
+        algorithm_type: str = "standard",
     ) -> list[dict]:
         """
         Search for images using a text query.
 
         Args:
             text_input: Text description of desired images
+            relevance: List of relevant images for feedback
+            irrelevance: List of irrelevant images for feedback
+            positive_text: List of positive text queries
+            negative_text: List of negative text queries
             k: Number of results to return
+            algorithm_type: Relevance feedback algorithm ('standard', 'ide_regular', 'ide_dec_hi')
 
         Returns:
             List of dictionaries with keys:
@@ -503,13 +534,32 @@ class SearchEngine:
                     )
                     for text in negative_text
                 ]
-            query_features = self._refine_query(
-                query_features,
-                relevance_features,
-                irrelevance_features,
-                positive_text_features,
-                negative_text_features,
-            )
+            # Select refinement algorithm based on type
+            self.logger.info(f"Using refinement algorithm: {algorithm_type}")
+            if algorithm_type == "ide_dec_hi":
+                query_features = self._refine_query_dec_hi(
+                    query_features,
+                    relevance_features,
+                    irrelevance_features,
+                    positive_text_features,
+                    negative_text_features,
+                )
+            elif algorithm_type == "ide_regular":
+                query_features = self._refine_query_ide_reg(
+                    query_features,
+                    relevance_features,
+                    irrelevance_features,
+                    positive_text_features,
+                    negative_text_features,
+                )
+            else:  # standard
+                query_features = self._refine_query_standard(
+                    query_features,
+                    relevance_features,
+                    irrelevance_features,
+                    positive_text_features,
+                    negative_text_features,
+                )
 
             # Search
             results = self._search(query_features, k)
@@ -541,22 +591,22 @@ class SearchEngine:
             "index_folder": str(self.index_folder),
         }
 
-    def _refine_query(
+    def _refine_query_standard(
         self,
         query,
         relevance_features,
         irrelevance_features,
         positive_text_features,
         negative_text_features,
-        alpha=1.0,
-        beta=0.75,
-        gamma=0.25,
-        text_beta=0.8,
-        text_gamma=0.3,
+        alpha=1.5,
+        beta=0.5,
+        gamma=0.15,
+        text_beta=0.4,
+        text_gamma=0.15,
     ):
         """
         Refine a search query based on relevance and irrelevance using the Rocchio algorithm.
-
+        Query refinement is performed using the standard Rocchio algorithm.
         Args:
             query (np.array): The original query vector (shape: (1, D) or (D,)).
             relevance_features (list[np.array]): List of relevant feature vectors.
@@ -608,6 +658,163 @@ class SearchEngine:
             refined_query /= norm
 
         # return refined_query
+        return refined_query.astype(np.float32).reshape(1, -1)
+
+    def _refine_query_ide_reg(
+        self,
+        query,
+        relevance_features,
+        irrelevance_features,
+        positive_text_features,
+        negative_text_features,
+        alpha=1.5,
+        beta=0.5,
+        gamma=0.15,
+        text_beta=0.4,
+        text_gamma=0.15,
+    ):
+        """
+        Refine a search query based on relevance and irrelevance using the Rocchio algorithm.
+        Query refinement is performed using the ide version of the Rocchio algorithm.
+        Args:
+            query (np.array): The original query vector (shape: (1, D) or (D,)).
+            relevance_features (list[np.array]): List of relevant feature vectors.
+            irrelevance_features (list[np.array]): List of irrelevant feature vectors.
+            positive_text_features (list[np.array]): List of positive text feature vectors.
+            negative_text_features (list[np.array]): List of negative text feature vectors.
+            alpha (float): Weight for original query.
+            beta (float): Weight for positive feedback.
+            gamma (float): Weight for negative feedback.
+
+        Returns:
+            np.array: The refined and normalized query vector.
+        """
+
+        # 1. Start with the original query weighted by alpha
+        # Ensure it's float32 to match FAISS/PyTorch expectations
+        refined_query = query.astype(np.float32) * alpha
+
+        # 2. Add Mean of Relevant Vectors (Beta)
+        if relevance_features is not None and len(relevance_features) > 0:
+            # Stack list into matrix (N, D) and calculate mean along axis 0
+            relevant_matrix = np.vstack(relevance_features)
+            relevant_sum = np.sum(relevant_matrix, axis=0)
+            refined_query += beta * relevant_sum
+
+        # 3. Subtract Mean of Irrelevant Vectors (Gamma)
+        if irrelevance_features is not None and len(irrelevance_features) > 0:
+            irrelevant_matrix = np.vstack(irrelevance_features)
+            irrelevant_sum = np.sum(irrelevant_matrix, axis=0)
+            refined_query -= gamma * irrelevant_sum
+
+        # 4. Add Mean of Positive Text Features (Positive Beta)
+        if positive_text_features is not None and len(positive_text_features) > 0:
+            positive_text_matrix = np.vstack(positive_text_features)
+            positive_text_sum = np.sum(positive_text_matrix, axis=0)
+            refined_query += text_beta * positive_text_sum
+
+        # 5. Subtract Mean of Negative Text Features (Negative gamma)
+        if negative_text_features is not None and len(negative_text_features) > 0:
+            negative_text_matrix = np.vstack(negative_text_features)
+            negative_text_sum = np.sum(negative_text_matrix, axis=0)
+            refined_query -= text_gamma * negative_text_sum
+
+        # 4. Normalize the resulting vector
+        # Since you are using Cosine Similarity (IndexFlatIP with normalized vectors),
+        # the refined query MUST be normalized back to unit length.
+        norm = np.linalg.norm(refined_query)
+        if norm > 0:
+            refined_query /= norm
+
+        # return refined_query
+        return refined_query.astype(np.float32).reshape(1, -1)
+
+    def _refine_query_dec_hi(
+        self,
+        query,
+        relevance_features,
+        irrelevance_features,
+        positive_text_features,
+        negative_text_features,
+        alpha=1.5,
+        beta=0.5,
+        gamma=0.15,
+        text_beta=0.4,
+        text_gamma=0.15,
+    ):
+        """
+        Refine a search query using the Ide Dec-Hi (Decoupled High) algorithm.
+
+        Ide Dec-Hi Logic:
+        - Relevants: Add sum of ALL relevant vectors (Ide standard).
+        - Irrelevants: Subtract ONLY the single 'highest' non-relevant vector
+          (the one most similar to the current query).
+
+        Args:
+            query (np.array): The original query vector (shape: (1, D) or (D,)).
+            relevance_features (list[np.array]): List of relevant feature vectors.
+            irrelevance_features (list[np.array]): List of irrelevant feature vectors.
+            positive_text_features (list[np.array]): List of positive text feature vectors.
+            negative_text_features (list[np.array]): List of negative text feature vectors.
+            alpha (float): Weight for original query.
+            beta (float): Weight for positive feedback.
+            gamma (float): Weight for negative feedback.
+
+        Returns:
+            np.array: The refined and normalized query vector.
+        """
+
+        # Ensure query is float32 and correct shape
+        query_vec = query.astype(np.float32)
+        # Flatten for easier dot product calculations if needed, though usually (1, D) is fine
+        query_flat = query_vec.flatten()
+
+        # 1. Start with the original query weighted by alpha
+        refined_query = query_vec * alpha
+
+        # 2. Add Sum of Relevant Vectors (Beta)
+        # Ide algorithm uses SUM, not MEAN (Rocchio uses Mean)
+        if relevance_features is not None and len(relevance_features) > 0:
+            relevant_matrix = np.vstack(relevance_features)
+            relevant_sum = np.sum(relevant_matrix, axis=0)
+            refined_query += beta * relevant_sum
+
+        # 3. Subtract Single Highest Irrelevant Vector (Gamma) -> [Ide Dec-Hi Specific]
+        if irrelevance_features is not None and len(irrelevance_features) > 0:
+            irrelevant_matrix = np.vstack(irrelevance_features)
+
+            # Find the non-relevant vector closest to the query (The "Highest" non-relevant)
+            # We calculate dot product between the original query and all irrelevant vectors
+            scores = np.dot(irrelevant_matrix, query_flat)
+            highest_ranked_index = np.argmax(scores)
+
+            # Only subtract the single most similar negative vector
+            highest_irrelevant_vec = irrelevant_matrix[highest_ranked_index]
+            refined_query -= gamma * highest_irrelevant_vec
+
+        # 4. Add Sum of Positive Text Features (Text Beta)
+        if positive_text_features is not None and len(positive_text_features) > 0:
+            positive_text_matrix = np.vstack(positive_text_features)
+            positive_text_sum = np.sum(positive_text_matrix, axis=0)
+            refined_query += text_beta * positive_text_sum
+
+        # 5. Subtract Single Highest Negative Text Feature (Text Gamma) -> [Ide Dec-Hi Specific]
+        # Applying the Dec-Hi logic to text negatives as well for consistency
+        if negative_text_features is not None and len(negative_text_features) > 0:
+            negative_text_matrix = np.vstack(negative_text_features)
+
+            # Find the negative text vector closest to the query
+            text_scores = np.dot(negative_text_matrix, query_flat)
+            highest_ranked_text_index = np.argmax(text_scores)
+
+            highest_negative_text_vec = negative_text_matrix[highest_ranked_text_index]
+            refined_query -= text_gamma * highest_negative_text_vec
+
+        # 6. Normalize the resulting vector
+        norm = np.linalg.norm(refined_query)
+        if norm > 0:
+            refined_query /= norm
+
         return refined_query.astype(np.float32).reshape(1, -1)
 
 

@@ -45,6 +45,10 @@ class SearchRequest(BaseModel):
         le=100,
         description="Number of results to return (1-100)",
     )
+    algorithm_type: str = Field(
+        default="standard",
+        description="Relevance feedback algorithm type (standard, ide_regular, ide_dec_hi)",
+    )
 
 
 class SearchResponse(BaseModel):

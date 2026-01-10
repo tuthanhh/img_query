@@ -48,7 +48,7 @@ index:
 	uv run backend index
 
 split:
-	uv run backend split
+	uv run backend split -r 0.01
 
 stats:
 	uv run backend stats

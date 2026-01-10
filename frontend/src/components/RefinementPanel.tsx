@@ -1,6 +1,15 @@
 import React from "react";
-import { X, RefreshCw, Plus, Minus, Settings2, Sliders } from "lucide-react";
+import {
+  X,
+  RefreshCw,
+  Plus,
+  Minus,
+  Settings2,
+  Sliders,
+  ChevronDown,
+} from "lucide-react";
 import { useSearch } from "../context/SearchContext";
+import type { AlgorithmType } from "../types";
 
 interface RefinementPanelProps {
   mobile?: boolean;
@@ -10,9 +19,10 @@ export const RefinementPanel: React.FC<RefinementPanelProps> = ({
   mobile = false,
 }) => {
   const {
-    results,
     relevantIds,
     irrelevantIds,
+    relevantImages,
+    irrelevantImages,
     positiveContext,
     setPositiveContext,
     negativeContext,
@@ -22,10 +32,9 @@ export const RefinementPanel: React.FC<RefinementPanelProps> = ({
     isLoading,
     k,
     setK,
+    algorithmType,
+    setAlgorithmType,
   } = useSearch();
-
-  const relevantImages = results.filter((img) => relevantIds.has(img.id));
-  const irrelevantImages = results.filter((img) => irrelevantIds.has(img.id));
 
   // Styles change based on whether it is in mobile drawer mode or desktop floating mode
   const containerClasses = mobile
@@ -52,6 +61,8 @@ export const RefinementPanel: React.FC<RefinementPanelProps> = ({
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
             <Sliders size={12} /> Configuration
           </h3>
+
+          {/* Results Count */}
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm">
               <label className="font-medium text-gray-700">
@@ -73,6 +84,29 @@ export const RefinementPanel: React.FC<RefinementPanelProps> = ({
             <div className="flex justify-between text-xs text-gray-400 font-medium">
               <span>4</span>
               <span>100</span>
+            </div>
+          </div>
+
+          {/* Algorithm Selection */}
+          <div className="space-y-2 pt-2">
+            <label className="text-sm font-medium text-gray-700">
+              Feedback Algorithm
+            </label>
+            <div className="relative">
+              <select
+                value={algorithmType}
+                onChange={(e) =>
+                  setAlgorithmType(e.target.value as AlgorithmType)
+                }
+                className="w-full pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-brand-500 focus:border-brand-500 text-sm appearance-none cursor-pointer hover:bg-white transition-colors"
+              >
+                <option value="standard">Standard Rocchio</option>
+                <option value="ide_regular">Ide Regular</option>
+                <option value="ide_dec_hi">Ide Dec-Hi</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                <ChevronDown size={14} />
+              </div>
             </div>
           </div>
         </div>
